@@ -7,8 +7,8 @@
 // RS, E, DB4, DB5, DB6, DB7
 LiquidCrystal lcd(11, 12, 5, 4, 3, 2);
 
-char desplayLine0[17];//16 симвлов в строке на экране + 1 (нужно)
-char desplayLine1[17];
+char desplayLine0[20];//16 симвлов в строке на экране + 1 (нужно)
+char desplayLine1[20];
 char float_str1[8];
 char float_str2[8];
 
@@ -76,6 +76,7 @@ Point2D V_l1, V_l2, V_F1, V_F2, V_F, V_F_norm;
 class CalmanFilter
 {
   public:
+
     float filter(float val) {  //функция фильтрации
       Pc = P + varProcess;
       G = Pc / (Pc + varVolt);
@@ -85,13 +86,20 @@ class CalmanFilter
       Xe = G * (val - Zp) + Xp; // "фильтрованное" значение
       return (Xe);
     };
+
     void SetVarVolt(float value) {
       varVolt = value;
-    };// среднее отклонение (ищем в excel)
+    };// среднее отклонение (ищем в excel) (фильтрация второй раз)
     void SetVarProcess(float value) {
       varProcess = value;
-    };// скорость реакции на изменение (подбирается вручную)
+    };// скорость реакции на изменение (подбирается вручную) (фильтрация второй раз)
   private:
+
+    float varVolt1 = 68.5;  // среднее отклонение (ищем в excel)
+    float varProcess1 = 0.5; // скорость реакции на изменение (подбирается вручную)
+    float varVolt2 = 68.5;  // среднее отклонение (ищем в excel)
+    float varProcess2 = 0.5; // скорость реакции на изменение (подбирается вручную)
+
     float varVolt = 68.5;  // среднее отклонение (ищем в excel)
     float varProcess = 0.5; // скорость реакции на изменение (подбирается вручную)
     float Pc = 0.0;
@@ -105,10 +113,46 @@ class CalmanFilter
 
 //================ Класс фильтр калмана =====================
 
-// переменные для калмана
-CalmanFilter calmanFilter_dc_A1;
-CalmanFilter calmanFilter_dc_A2;
-// переменные для калмана
+class TwoLevelFilter//класс двухуревневой фильтрации
+{
+  public:
+  
+    TwoLevelFilter(float varVolt1, float varProcess1, float varVolt2, float varProcess2) {
+      _f1 = *(new CalmanFilter());
+      _f2 = *(new CalmanFilter());
+
+      _f1.SetVarVolt(varVolt1);
+      _f1.SetVarProcess(varProcess1);
+
+      _f2.SetVarVolt(varVolt2);
+      _f2.SetVarProcess(varProcess2);
+    };
+  public:
+  
+    float filter(float val) {
+      _val_filtered1 = _f1.filter(val);
+      _val_filtered2 = _f2.filter(_val_filtered1);
+      return _val_filtered2;
+    };
+
+    float GetVal_filtered1() {
+      return _val_filtered1;
+    };
+    float GetVal_filtered2() {
+      return _val_filtered2;
+    };
+
+  private:
+  
+    CalmanFilter _f1, _f2;
+    float _val_filtered1, _val_filtered2;
+
+};
+
+//фильтры калмана для сенсоров тока
+TwoLevelFilter calmanFilter_dc_A1 = *(new TwoLevelFilter(68.5, 0.5, 0.5, 0.5)); 
+TwoLevelFilter calmanFilter_dc_A2 = *(new TwoLevelFilter(525.9, 0.5, 218.9, 0.05));
+//фильтры калмана для сенсоров тока
 
 
 void setup()
@@ -127,15 +171,7 @@ void setup()
 
   // устанавливаем размер (количество столбцов и строк) экрана
   lcd.begin(16, 2);
-
-  //фильтры калмана для сенсоров тока
-  calmanFilter_dc_A1 = *(new CalmanFilter);
-  calmanFilter_dc_A1.SetVarVolt(68.5);//!!
-  calmanFilter_dc_A1.SetVarProcess(0.5);//!!
-
-  calmanFilter_dc_A2 = *(new CalmanFilter);
-  calmanFilter_dc_A2.SetVarVolt(39.5);//!!
-  calmanFilter_dc_A2.SetVarProcess(0.05);//!!//0.2
+   
 }
 
 void loop()
@@ -250,17 +286,13 @@ void updateDisplay() {
 
 void PrintCurrent()
 {
-  //  Serial.print(dc_A1);
-  //  Serial.print(" ");
-  //  Serial.println(dc_A2);
-  ////  Serial.print(dc_A3);
-  ////  Serial.print(" mA");
-
   //=========== Serial Plotter =======================
 
-        Serial.print(dc_A2);
-        Serial.print(" ");
-        Serial.println(dc_A2_filtered);
+  Serial.print(0);
+  Serial.print(" ");
+  Serial.print(calmanFilter_dc_A2.GetVal_filtered1());
+  Serial.print(" ");
+  Serial.println(calmanFilter_dc_A2.GetVal_filtered2());
 
   //Serial.println(dc_A2);//---
 
@@ -310,16 +342,16 @@ void SendTaskToServos(float a1, float a2, float a3) {
 
 double GetCurrent_mA(int analogPin0, int analogPin1)// берем значения по модулю
 {
-//  delta_voltage_sum = 0;
-//  for (sample_count = 0; sample_count < n; sample_count ++)
-//  {
-//    adc_value = analogRead(analogPin0) - analogRead(analogPin1);
-//    delta_voltage_sum += adc_value;
-//    delayMicroseconds(10);
-//  }
-//  if (delta_voltage_sum < 0) delta_voltage_sum = 0; //значения около нуля обнулим для устранения ошибки  // берем значения по модулю
-//  voltage_average_value = (float)delta_voltage_sum / n;
-//  return (voltage_average_value * 0.00488) * 1000 / resistance;
+  //  delta_voltage_sum = 0;
+  //  for (sample_count = 0; sample_count < n; sample_count ++)
+  //  {
+  //    adc_value = analogRead(analogPin0) - analogRead(analogPin1);
+  //    delta_voltage_sum += adc_value;
+  //    delayMicroseconds(10);
+  //  }
+  //  if (delta_voltage_sum < 0) delta_voltage_sum = 0; //значения около нуля обнулим для устранения ошибки  // берем значения по модулю
+  //  voltage_average_value = (float)delta_voltage_sum / n;
+  //  return (voltage_average_value * 0.00488) * 1000 / resistance;
 
   adc_value = analogRead(analogPin0) - analogRead(analogPin1);
   return (adc_value * 0.00488) * 1000 / resistance;
