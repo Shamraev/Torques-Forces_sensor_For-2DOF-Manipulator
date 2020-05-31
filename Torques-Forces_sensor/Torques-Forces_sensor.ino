@@ -16,7 +16,7 @@ int adc_value = 0;
 double voltage_average_value = 0;
 double dc_voltage_V0 = 4.85;//
 double dc_voltage_V1 = 0;
-const float resistance = 0.2;//
+const float resistance = 2.5;//
 unsigned long sample_count = 0;
 const unsigned long n = 100;//5000//
 long delta_voltage_sum = 0;
@@ -258,9 +258,9 @@ void PrintCurrent()
 
   //=========== Serial Plotter =======================
 
-  //      Serial.print(dc_A2);
-  //      Serial.print(" ");
-  //      Serial.println(dc_A2_filtered);
+        Serial.print(dc_A2);
+        Serial.print(" ");
+        Serial.println(dc_A2_filtered);
 
   //Serial.println(dc_A2);//---
 
@@ -310,16 +310,19 @@ void SendTaskToServos(float a1, float a2, float a3) {
 
 double GetCurrent_mA(int analogPin0, int analogPin1)// берем значения по модулю
 {
-  delta_voltage_sum = 0;
-  for (sample_count = 0; sample_count < n; sample_count ++)
-  {
-    adc_value = analogRead(analogPin0) - analogRead(analogPin1);
-    delta_voltage_sum += adc_value;
-    delayMicroseconds(10);
-  }
-  if (delta_voltage_sum < 0) delta_voltage_sum = 0; //значения около нуля обнулим для устранения ошибки  // берем значения по модулю
-  voltage_average_value = (float)delta_voltage_sum / n;
-  return (voltage_average_value * 0.00488) * 1000 / resistance;
+//  delta_voltage_sum = 0;
+//  for (sample_count = 0; sample_count < n; sample_count ++)
+//  {
+//    adc_value = analogRead(analogPin0) - analogRead(analogPin1);
+//    delta_voltage_sum += adc_value;
+//    delayMicroseconds(10);
+//  }
+//  if (delta_voltage_sum < 0) delta_voltage_sum = 0; //значения около нуля обнулим для устранения ошибки  // берем значения по модулю
+//  voltage_average_value = (float)delta_voltage_sum / n;
+//  return (voltage_average_value * 0.00488) * 1000 / resistance;
+
+  adc_value = analogRead(analogPin0) - analogRead(analogPin1);
+  return (adc_value * 0.00488) * 1000 / resistance;
 
 }
 
