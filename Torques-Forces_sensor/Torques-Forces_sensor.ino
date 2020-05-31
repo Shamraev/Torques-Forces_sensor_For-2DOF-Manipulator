@@ -18,7 +18,7 @@ double dc_voltage_V0 = 4.85;//
 double dc_voltage_V1 = 0;
 const float resistance = 2.5;//
 unsigned long sample_count = 0;
-const unsigned long n = 100;//5000//
+const unsigned long n = 15;//5000//100
 long delta_voltage_sum = 0;
 long voltage_sum = 0;
 
@@ -49,7 +49,7 @@ double M1, M2, F1, F2;
 double k1 = 0.0116;//
 double k2 = 0.0272;//0.0374//0.0306
 double M10 = 0;//
-double M20 = 2.4;//0.2
+double M20 = 0;//0.2
 
 double l1 = 15;
 double l2 = 16;
@@ -116,7 +116,7 @@ class CalmanFilter
 class TwoLevelFilter//класс двухуревневой фильтрации
 {
   public:
-  
+
     TwoLevelFilter(float varVolt1, float varProcess1, float varVolt2, float varProcess2) {
       _f1 = *(new CalmanFilter());
       _f2 = *(new CalmanFilter());
@@ -128,7 +128,7 @@ class TwoLevelFilter//класс двухуревневой фильтрации
       _f2.SetVarProcess(varProcess2);
     };
   public:
-  
+
     float filter(float val) {
       _val_filtered1 = _f1.filter(val);
       _val_filtered2 = _f2.filter(_val_filtered1);
@@ -143,15 +143,15 @@ class TwoLevelFilter//класс двухуревневой фильтрации
     };
 
   private:
-  
+
     CalmanFilter _f1, _f2;
     float _val_filtered1, _val_filtered2;
 
 };
 
 //фильтры калмана для сенсоров тока
-TwoLevelFilter calmanFilter_dc_A1 = *(new TwoLevelFilter(68.5, 0.5, 0.5, 0.5)); 
-TwoLevelFilter calmanFilter_dc_A2 = *(new TwoLevelFilter(525.9, 0.5, 218.9, 0.05));
+TwoLevelFilter calmanFilter_dc_A1 = *(new TwoLevelFilter(68.5, 0.5, 0.5, 0.5));
+TwoLevelFilter calmanFilter_dc_A2 = *(new TwoLevelFilter(218.8, 10, 218.8, 1));
 //фильтры калмана для сенсоров тока
 
 
@@ -171,7 +171,37 @@ void setup()
 
   // устанавливаем размер (количество столбцов и строк) экрана
   lcd.begin(16, 2);
-   
+
+}
+
+
+int ArrayCompare(const int *AFirst, const int *ASecond)
+{
+  if (*AFirst < *ASecond) return -1;
+  return (*AFirst == *ASecond) ? 0 : 1;
+}
+
+// функция считывает аналоговый вход заданное количество раз
+// и возвращает медианное отфильтрованное значение
+float readMedian (int pin0, int pin1, int samples) {
+  // массив для хранения данных
+  long raw[samples];
+  long tmp = 0;
+  // считываем вход и помещаем величину в ячейки массива
+  for (int i = 0; i < samples; i++) {
+    for (int j = 0; j < samples; j++) {
+      tmp += analogRead(pin0) - analogRead(pin1);
+    }
+    raw[i] = tmp / samples;
+  }
+  // сортируем массив по возрастанию значений в ячейках
+  size_t M_Size = sizeof(raw) / sizeof(raw[0]);
+
+  qsort(raw, M_Size, sizeof(raw[0]), ArrayCompare);
+
+
+  // возвращаем значение средней ячейки массива
+  return (float)raw[samples / 2];
 }
 
 void loop()
@@ -179,8 +209,12 @@ void loop()
 {
   //================================ ТОК ========================================
 
-  dc_A1 = GetCurrent_mA(A0, A1);
-  dc_A2 = GetCurrent_mA(A2, A3);
+  //  dc_A1 = GetCurrent_mA(A0, A1);
+  //  dc_A2 = GetCurrent_mA(A2, A3);
+
+  dc_A1 = readMedian(A0, A1, n) * 0.00488 * 1000 / resistance; //---
+  dc_A2 = readMedian(A2, A3, n) * 0.00488 * 1000 / resistance; //---
+
   dc_A1_filtered = calmanFilter_dc_A1.filter(dc_A1);
   dc_A2_filtered = calmanFilter_dc_A2.filter(dc_A2);
 
@@ -192,30 +226,28 @@ void loop()
   M2 = k2 * dc_A2_filtered + M20;
 
   //В кг
-  F1 = M1 / l1;
-  F2 = M2 / l2;
+  F1 = abs(M1 / l1);
+  F2 = abs(M2 / l2);
 
-  //test
-  //сила F1
-  if (dc_A2_filtered < 10)//отсекаем
-    F1 = 0;
-  else
-    F1 = 2.5755 * dc_A2_filtered + 52.217;
-  F1 /= 1000;// в кг
-  //сила F2
-  if (dc_A2_filtered < 15)//отсекаем
-    F2 = 0;
-  else
-    F2 = 149.86 * log(dc_A2_filtered) - 349.09; //log = ln
-  F2 /= 1000;// в кг
-  //test
+
 
   V_l1.X = cos(PI - a1 * DEG_TO_RAD); V_l1.Y = sin(PI - a1 * DEG_TO_RAD);//направляющий вектор звена l1
   V_l2.X = cos(PI + a2 * DEG_TO_RAD); V_l2.Y = sin(PI + a2 * DEG_TO_RAD);//направляющий вектор звена l2
 
-  V_F1.X = V_l1.Y; V_F1.Y = -V_l1.X; //направляющий нормированный вектор силы F1//!!temp!!{повернут направо от звена l1 под прямым углом}:{нужно учесть направление момента M1}
-  V_F2.X = V_l2.Y; V_F2.Y = -V_l2.X; //направляющий нормированный вектор силы F1//!!temp!!{повернут направо от звена l1 под прямым углом}:{нужно учесть направление момента M1}
+  //положительное направление куртящего момента Mi - против часовой стрелки
+  if (M1 <= 0) {
+    V_F1.X = V_l1.Y; V_F1.Y = -V_l1.X; //направляющий нормированный вектор силы F1//!!temp!!{повернут направо от звена l1 под прямым углом}
+  }
+  else {
+    V_F1.X = -V_l1.Y; V_F1.Y = V_l1.X; //налево
+  }
 
+  if (M2 <= 0) {
+    V_F2.X = V_l2.Y; V_F2.Y = -V_l2.X; //направляющий нормированный вектор силы F2//!!temp!!{повернут направо от звена l1 под прямым углом}
+  }
+  else {
+    V_F2.X = -V_l2.Y; V_F2.Y = V_l2.X; //налево
+  }
   //??
   //длины векторов сил в кг
   V_F1.X *= F1; V_F1.Y *= F1;
@@ -290,13 +322,11 @@ void PrintCurrent()
 
   Serial.print(0);
   Serial.print(" ");
-  Serial.print(calmanFilter_dc_A2.GetVal_filtered1());
+  Serial.print(dc_A1);
   Serial.print(" ");
-  Serial.println(calmanFilter_dc_A2.GetVal_filtered2());
-
-  //Serial.println(dc_A2);//---
-
-
+  Serial.println(dc_A1_filtered);
+  //  Serial.print(" ");
+  //  Serial.println(calmanFilter_dc_A2.GetVal_filtered2());
 
   //==================================================
 
@@ -316,9 +346,9 @@ void PrintForces()
 
   dtostrf(V_F_norm.X, 4, 2, float_str1);
   dtostrf(V_F_norm.Y, 4, 2, float_str2);
-  //  sprintf(desplayLine1, "V_F=(%-3s;%-3s)", float_str1, float_str2);
+  sprintf(desplayLine1, "V_F=(%-3s;%-3s)", float_str1, float_str2);
 
-  sprintf(desplayLine1, "F=%-3d,%-3d,%-3d   ", f, f1, f2); //все 16 символов обновляем
+  //  sprintf(desplayLine1, "F=%-3d,%-3d,%-3d   ", f, f1, f2); //все 16 символов обновляем
 
 }
 
@@ -340,22 +370,18 @@ void SendTaskToServos(float a1, float a2, float a3) {
   servoA3.write(90 - a3 + a3d);
 }
 
-double GetCurrent_mA(int analogPin0, int analogPin1)// берем значения по модулю
+double GetCurrent_mA(int analogPin0, int analogPin1)
 {
-  //  delta_voltage_sum = 0;
-  //  for (sample_count = 0; sample_count < n; sample_count ++)
-  //  {
-  //    adc_value = analogRead(analogPin0) - analogRead(analogPin1);
-  //    delta_voltage_sum += adc_value;
-  //    delayMicroseconds(10);
-  //  }
-  //  if (delta_voltage_sum < 0) delta_voltage_sum = 0; //значения около нуля обнулим для устранения ошибки  // берем значения по модулю
-  //  voltage_average_value = (float)delta_voltage_sum / n;
-  //  return (voltage_average_value * 0.00488) * 1000 / resistance;
+  delta_voltage_sum = 0;
+  for (sample_count = 0; sample_count < n; sample_count ++)
+  {
+    adc_value = analogRead(analogPin0) - analogRead(analogPin1);
+    delta_voltage_sum += adc_value;
+    delayMicroseconds(10);
+  }
 
-  adc_value = analogRead(analogPin0) - analogRead(analogPin1);
-  return (adc_value * 0.00488) * 1000 / resistance;
-
+  voltage_average_value = (float)delta_voltage_sum / n;
+  return (voltage_average_value * 0.00488) * 1000 / resistance;
 }
 
 double GetVoltage(int analogPin)
