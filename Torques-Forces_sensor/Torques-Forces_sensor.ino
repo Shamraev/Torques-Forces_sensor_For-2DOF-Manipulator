@@ -7,8 +7,8 @@
 // RS, E, DB4, DB5, DB6, DB7
 LiquidCrystal lcd(11, 12, 5, 4, 3, 2);
 
-char desplayLine0[20];//16 симвлов в строке на экране + 1 (нужно)
-char desplayLine1[20];
+char desplayLine0[30];//16 симвлов в строке на экране + 1 (нужно)
+char desplayLine1[30];
 char float_str1[8];
 char float_str2[8];
 
@@ -46,10 +46,9 @@ float dc_A2_filtered = 0;
 
 double M1, M2, F1, F2;
 
-double k1 = 0.0116;//
-double k2 = 0.0272;//0.0374//0.0306
-double M10 = 0;//
-double M20 = 0;//0.2
+double k1 = 0.002;//
+double k2 = 0.002;//0.0374//0.0306
+
 
 double l1 = 15;
 double l2 = 16;
@@ -150,8 +149,8 @@ class TwoLevelFilter//класс двухуревневой фильтрации
 };
 
 //фильтры калмана для сенсоров тока
-TwoLevelFilter calmanFilter_dc_A1 = *(new TwoLevelFilter(68.5, 0.5, 0.5, 0.5));
-TwoLevelFilter calmanFilter_dc_A2 = *(new TwoLevelFilter(218.8, 10, 218.8, 1));
+TwoLevelFilter calmanFilter_dc_A1 = *(new TwoLevelFilter(267, 40, 218.8, 15));
+TwoLevelFilter calmanFilter_dc_A2 = *(new TwoLevelFilter(267, 40, 218.8, 15));
 //фильтры калмана для сенсоров тока
 
 
@@ -218,12 +217,17 @@ void loop()
   dc_A1_filtered = calmanFilter_dc_A1.filter(dc_A1);
   dc_A2_filtered = calmanFilter_dc_A2.filter(dc_A2);
 
+
+  //test
+  delay(300);
+  //test
+
   PrintCurrent();
 
   //================================ МОМЕНТЫ И СИЛЫ ========================================
 
-  M1 = k1 * dc_A1_filtered + M10;
-  M2 = k2 * dc_A2_filtered + M20;
+  M1 = k1 * dc_A1_filtered;
+  M2 = k2 * dc_A2_filtered;
 
   //В кг
   F1 = abs(M1 / l1);
@@ -324,16 +328,17 @@ void PrintCurrent()
   Serial.print(" ");
   Serial.print(dc_A1);
   Serial.print(" ");
-  Serial.println(dc_A1_filtered);
-  //  Serial.print(" ");
-  //  Serial.println(calmanFilter_dc_A2.GetVal_filtered2());
+  Serial.print(calmanFilter_dc_A1.GetVal_filtered1());
+  Serial.print(" ");
+  Serial.println(calmanFilter_dc_A1.GetVal_filtered2());
+  
 
   //==================================================
 
   int a1 = round(dc_A1_filtered);
   int a2 = round(dc_A2_filtered);
 
-  sprintf(desplayLine0, "A1,A2:%-3d,%-3d mA", a1, a2);
+//  sprintf(desplayLine0, "A1,A2:%-3d,%-3d mA", a1, a2);
 
 }
 
@@ -344,11 +349,12 @@ void PrintForces()
   int f2 = round(F2 * 1000);
   int f = round(V_F.length() * 1000);
 
+
   dtostrf(V_F_norm.X, 4, 2, float_str1);
   dtostrf(V_F_norm.Y, 4, 2, float_str2);
-  sprintf(desplayLine1, "V_F=(%-3s;%-3s)", float_str1, float_str2);
-
-  //  sprintf(desplayLine1, "F=%-3d,%-3d,%-3d   ", f, f1, f2); //все 16 символов обновляем
+  sprintf(desplayLine0, "V_F=(%-3s;%-3s)", float_str1, float_str2);
+  sprintf(desplayLine1, "F=%-3d,%-3d,%-3d   ", f, f1, f2); //все 16 символов обновляем
+  
 
 }
 
