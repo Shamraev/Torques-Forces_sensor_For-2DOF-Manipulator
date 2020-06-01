@@ -1,6 +1,11 @@
 #include <Servo.h>
 #include <LiquidCrystal.h>
-//#include <avr/pgmspace.h>
+
+//SETTINGS
+//коллаборативный режим
+const bool Adaptive_Enable = false;//
+const bool DEBUG = false;
+//SETTINGS
 
 // инициализируем объект-экран, передаём использованные
 // для подключения контакты на Arduino в порядке:
@@ -24,11 +29,12 @@ long voltage_sum = 0;
 
 double dc_A1, dc_A2, dc_A3;
 
-const double dc_wall_A1 = 80;//mA
-const double dc_wall_A2 = 70;
+//коллаборативный режим
+const double dc_wall_A1 = 300;//mA
+const double dc_wall_A2 = 300;
 const double dc_wall_A3 = 300;
 
-const bool Adaptive_Enable = false;//
+
 
 Servo servoA1;  // create servo object to control a servo
 Servo servoA2;  // create servo object to control a servo
@@ -43,6 +49,7 @@ float a1d = 29.1, a2d = 26, a3d = - 5; //значения для выставл�
 
 float dc_A1_filtered = 0;
 float dc_A2_filtered = 0;
+float dc_A3_filtered = 0;
 
 double M1, M2, F1, F2;
 
@@ -268,20 +275,20 @@ void loop()
   //======================= Коллаборативный режим ============================
 
   if (Adaptive_Enable) {
-    if (dc_A1 > dc_wall_A1)
+    if (abs(dc_A1_filtered) > dc_wall_A1)
     {
-      a1 = a1 + deltaA;
+      a1 = a1 - deltaA * sign(dc_A1_filtered) ;
       servoA1.write(a1 + a1d);
     }
-    if (dc_A2 > dc_wall_A2)
+    if (abs(dc_A2_filtered) > dc_wall_A2)
     {
-      a2 = a2 - deltaA;
-      servoA2.write(a2 + a1d);
+      a2 = a2 + deltaA * sign(dc_A2_filtered);
+      servoA2.write(a2 + a2d);
     }
-    if (dc_A3 > dc_wall_A3)
+    if (abs(dc_A3_filtered) > dc_wall_A3)
     {
-      a3 = a3 + deltaA;
-      servoA3.write(a3 + a1d);
+      a3 = a3 - deltaA * sign(dc_A3_filtered);
+      servoA3.write(a3 + a3d);
     }
   }
   //================================ СЕРВО ============================================
@@ -324,21 +331,23 @@ void PrintCurrent()
 {
   //=========== Serial Plotter =======================
 
+  if (DEBUG){
   Serial.print(0);
   Serial.print(" ");
-  Serial.print(dc_A1);
+  Serial.print(dc_A2);
   Serial.print(" ");
-  Serial.print(calmanFilter_dc_A1.GetVal_filtered1());
+  Serial.print(calmanFilter_dc_A2.GetVal_filtered1());
   Serial.print(" ");
-  Serial.println(calmanFilter_dc_A1.GetVal_filtered2());
-  
+  Serial.println(calmanFilter_dc_A2.GetVal_filtered2());
+  }
+
 
   //==================================================
 
   int a1 = round(dc_A1_filtered);
   int a2 = round(dc_A2_filtered);
 
-//  sprintf(desplayLine0, "A1,A2:%-3d,%-3d mA", a1, a2);
+  //  sprintf(desplayLine0, "A1,A2:%-3d,%-3d mA", a1, a2);
 
 }
 
@@ -354,7 +363,7 @@ void PrintForces()
   dtostrf(V_F_norm.Y, 4, 2, float_str2);
   sprintf(desplayLine0, "V_F=(%-3s;%-3s)", float_str1, float_str2);
   sprintf(desplayLine1, "F=%-3d,%-3d,%-3d   ", f, f1, f2); //все 16 символов обновляем
-  
+
 
 }
 
@@ -401,4 +410,9 @@ double GetVoltage(int analogPin)
   }
   voltage_average_value = (float)voltage_sum / n;
   return voltage_average_value * 0.00488;
+}
+static inline int sign(int val) {
+  if (val < 0) return -1;
+  if (val == 0) return 0;
+  return 1;
 }
